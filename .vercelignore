@@ -1,0 +1,7 @@
+sources-private/
+data-private/
+evidence/
+screenshots/
+video/
+test-results/
+.env*

@@ -39,6 +39,7 @@ Next.js 앱, 생성 API, 교사 점검, 저장·재열기, 인쇄용 PDF를 구�
 
 Node.js 22.18 이상에서 `npm ci`, `npm test`, `npm run build`를 실행한다.
 `npm run dev`로 앱을 열 수 있다. 실제 연결 설정이 없으면 첫 화면에 안내가 표시된다.
+Windows PowerShell에서 `npm.ps1` 실행 정책 오류가 나면 정책을 변경하지 않고 `npm.cmd test`, `npm.cmd run build`, `npm.cmd run test:mobile`로 실행한다.
 로컬 설정이 필요한 경우 [.env.example](.env.example)의 이름을 따라 `.env.local`을 구성한다.
 `npm run test:mobile`은 빌드한 앱을 임시 포트에 띄워 설치된 Edge에서 가상 데이터로 검증한다.
 `node scripts/check-release.mjs`는 값 출력 없이 연결 설정과 원자료 제외 규칙을 점검한다.
