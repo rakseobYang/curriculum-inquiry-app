@@ -1,58 +1,49 @@
-﻿# 교육과정 기반 과학 탐구 수업 설계기
+# 교육과정 기반 과학 탐구 수업 설계기
 
-## 목표
-2022 개정 중학교 과학 교육과정의 성취기준을 바탕으로, 검증된 미래엔 과학 1·2·3 자료를 참고해 교과 지식, 학생 탐구, 실생활 적용을 연결하는 수업안을 설계한다.
+2022 개정 중학교 과학 성취기준을 검색하고, 선택한 기준과 교사 입력을 바탕으로 **공식 교육과정 기반** 수업안 초안을 작성하는 앱입니다. 교과서 자료는 현재 표시·외부 전송 권한이 확인되지 않아 검색 결과와 생성 근거에서 제외합니다. 따라서 교과서 연계 생성은 제공하지 않습니다. 과학 3의 PDF는 2015 개정 자료 참고용이며 2022 개정 교과서로 표시하지 않습니다.
 
-## 입력
-교육과정 버전, 교과서 판본, 학년, 성취기준,
-단원, 전체 중 해당 차시, 수업 시간, 장비와 학생 조건.
+## 현재 구조와 상태
 
-## 출력
-학습 목표, 핵심 개념, 탐구 질문, 학생 수행 절차,
-자료 기록, 근거 설명, 실생활 적용 과제, 과정 평가,
-준비물·안전·시간 배분, 출처와 교사 확인 사항.
+- Next.js 정적 내보내기, GitHub Pages의 `/curriculum-inquiry-app/` 하위 경로 배포용입니다.
+- 로그인 없이 사용합니다. 수업안 목록·검색·작성·수정·삭제·백업·복원은 이 브라우저의 IndexedDB에만 저장합니다. 브라우저 데이터 삭제 시 사라질 수 있으므로 백업 파일을 별도 보관하세요.
+- 실시간 생성은 Cloudflare Worker의 Workers AI 바인딩을 사용합니다. 수업안은 IndexedDB에, 서버 사용량 카운터는 SQLite Durable Object에 저장합니다.
+- 공개 API는 Turnstile 검증, 입력/출력 제한, 시간 초과, Durable Object 기반 IP·전체 사용량 한도를 적용하도록 구성했습니다. CORS는 비용 제한으로 간주하지 않습니다.
+- Worker, Turnstile, Workers AI, GitHub Pages 실서비스는 연결 확인이 필요합니다. 화면 자동 검증에는 모의 응답을 사용합니다.
+- 공개 데이터에는 검증된 2022 과학 성취기준만 포함합니다. PDF, 추출 텍스트, 교과서 카탈로그는 정적 배포 산출물에 넣지 않습니다.
 
-## 원칙
-확보하지 못한 교과서를 학습했다고 표현하지 않는다.
-없는 성취기준·교과서 쪽수·실험 결과를 만들지 않는다.
-원자료와 비밀키를 공개 저장소에 올리지 않는다.
+## 로컬 실행과 검증 (PowerShell)
 
-## 현재 상태
-Next.js 앱, 생성 API, 교사 점검, 저장·재열기, 인쇄용 PDF를 구현했다.
-로컬 PostgreSQL과 가상 응답을 사용한 Edge 모바일 검증 결과는 [체크리스트](CHECKLIST.md)에서 확인할 수 있다.
-실제 Supabase 및 OpenAI 프로젝트 연결, 전체 교과서 범위 검증, Vercel 배포는 진행 중이다.
+```powershell
+cd "C:\Users\충청북도교육청\Desktop\교대원(AI 에이전트)\기말과제\curriculum-inquiry-app\curriculum-inquiry-app"
+npm.cmd ci
+npm.cmd test
+npm.cmd run build
+npm.cmd run check:pages
+npm.cmd run test:mobile
+npm.cmd run dev
+```
 
-단계별 완료 기준·테스트·계정·비용·승인 항목은 [개발 계획](DEVELOPMENT_PLAN.md)에 정리했다.
-확보·미확보 자료와 실제 파일 상태는 [자료 확보 현황](SOURCE_INVENTORY.md)에 기록한다.
+개발 서버 주소는 `http://localhost:3000/curriculum-inquiry-app/`입니다. `test:mobile`은 빌드 산출물을 GitHub Pages 하위 경로처럼 제공하고 Edge 360px에서 실행합니다. Turnstile과 Worker 응답은 가상으로 대체하므로 실제 서비스 연결을 검증하지 않습니다. 테스트 빌드에는 테스트용 공개 설정이 주입되므로 마친 뒤 `npm.cmd run build`를 실행해 배포용 산출물을 다시 만드세요.
 
-## 현재 검증 상태 (2026-11-22)
+## 서비스 연결 준비
 
-- 교육부 고시 2022-33호 별책 9의 중학교 과학 성취기준 87건을 MCP 검색 결과와 대조했다. MCP 요약은 공식 원문으로 취급하지 않는다.
-- 제공된 과학 1·2·3 PDF의 파일 지문은 기록과 일치한다. 73개 부분 근거 구간이 58개 성취기준에 연결되어 있고, 29개 기준은 현재 연결 근거가 없다.
-- 교과서 근거는 화면 표시와 OpenAI API 전송이 모두 비활성이다. 근거 또는 전송 승인이 없으면 생성을 차단하는 것이 현재 승인 게이트다.
-- 로컬 앱·가상 응답 검증과 스토리보드 영상 초안은 있으나, Supabase/OpenAI/Vercel 연결·실제 배포·교사 계정 인수 검증은 미완료다.
-- 실제 개발 기록과 Git 커밋은 11월 21·22일 두 날짜에 있다. 다만 12주차 실제 수업일이 확인되지 않아 두 날짜가 모두 요건에 포함되는지는 미확정이다. 디자인 변경은 전후 캡처로 1건만 확인되어 2건이 더 필요하다. 12주차 이후 5일 커밋과 Remotion MP4 제작·공개 배포·Padlet 제출도 남아 있다. 12주차 Notion 기말과제 안내·주의사항의 제출 기준은 확인했고, 별도 13주차 녹화 강의는 미확인이다.
+일반 빌드는 저장소의 공개 성취기준 JSON을 사용합니다. `npm.cmd run standards:refresh`는 검증된 비공개 SQL이 있는 환경에서 공개 JSON을 갱신할 때만 실행합니다. Actions는 `out/`을 검사한 뒤 업로드합니다.
 
-자세한 완료 증거와 다음 의존 단계는 [체크리스트](CHECKLIST.md), [개발 계획](DEVELOPMENT_PLAN.md), [자료 현황](SOURCE_INVENTORY.md), [개발 기록](evidence/)에서 확인한다.
+운영 Turnstile 위젯의 호스트는 `rakseobyang.github.io`입니다. 로컬에서 실제 Turnstile을 확인하려면 `localhost`를 허용한 별도 위젯과 별도 로컬 Worker 설정을 사용합니다. 로컬 Worker의 허용 Origin은 `http://localhost:3000`입니다. `127.0.0.1`을 쓰는 경우에는 위젯 호스트와 Origin도 그 주소에 맞춥니다.
 
-## 로컬 실행
+1. Cloudflare 계정에서 Worker를 준비하고, Pages 호스트용 Turnstile 사이트 키와 비밀 키를 별도로 발급합니다.
+2. `workers/wrangler.jsonc`의 허용 Origin을 실제 Pages 주소와 대조합니다. 기본값은 `https://rakseobyang.github.io`입니다.
+3. Workers Free 플랜에서 `AI` 바인딩을 사용합니다. Worker Secrets에 `TURNSTILE_SECRET_KEY`와 충분히 긴 임의 값인 `RATE_LIMIT_HMAC_KEY`를 직접 입력합니다. 비밀값은 채팅, 브라우저 환경변수, Git에 넣지 마세요.
+4. Worker를 배포하고 실제 Worker URL과 Turnstile 공개 사이트 키를 GitHub 저장소 Actions Variables `CLOUDFLARE_WORKER_URL`, `TURNSTILE_SITE_KEY`에 등록합니다. 비밀값을 Actions Variables에 두지 않습니다.
+5. GitHub 저장소 Settings에서 Pages 배포 원본을 GitHub Actions로 설정합니다. 실제 계정 설정 이후에만 Pages 배포 및 실제 AI 검증을 진행합니다.
 
-Node.js 22.18 이상에서 `npm ci`, `npm test`, `npm run build`를 실행한다.
-`npm run dev`로 앱을 열 수 있다. 실제 연결 설정이 없으면 첫 화면에 안내가 표시된다.
-Windows PowerShell에서 `npm.ps1` 실행 정책 오류가 나면 정책을 변경하지 않고 `npm.cmd test`, `npm.cmd run build`, `npm.cmd run test:mobile`로 실행한다.
-로컬 설정이 필요한 경우 [.env.example](.env.example)의 이름을 따라 `.env.local`을 구성한다.
-`npm run test:mobile`은 빌드한 앱을 임시 포트에 띄워 설치된 Edge에서 가상 데이터로 검증한다.
-`node scripts/check-release.mjs`는 값 출력 없이 연결 설정과 원자료 제외 규칙을 점검한다.
-`node scripts/check-release.mjs --live`는 연결이 설정된 경우 Supabase의 검증 성취기준 수와 OpenAI 모델 접근을 조회한다. 교과서 원문 전송, 생성 호출, DB 쓰기는 하지 않는다.
+Workers Free의 Workers AI 무료 할당량은 계정 전체 하루 10,000 Neurons이며 UTC 자정에 초기화됩니다. 앱 자체 한도는 IP 기준 하루 20회, 전체 하루 100회입니다. 무료 할당량이 소진되면 생성 요청이 실패할 수 있습니다. [Workers AI 요금](https://developers.cloudflare.com/workers-ai/platform/pricing/)
 
-## 실서비스 검증 순서
+## 자료 및 개발 기록
 
-1. 대상 Supabase 프로젝트에 `supabase/migrations/`의 SQL을 번호순으로 적용한다. 테스트 교사 계정을 준비하고 공개 회원가입 설정을 확인한다.
-2. `node scripts/verify-standard-seed.mjs`로 로컬 검증을 다시 실행한 후 검토된 `data-private/verified-standard-seed.sql`을 Supabase에 적용한다. 공식 원문 87건과 전송 비활성 기본 상태를 확인한다.
-3. 자료 표시·클라우드 저장·API 전송 권한이 확인된 근거만 권한 범위에 맞게 등록한다. 원본 PDF, 추출 텍스트, 로컬 검토 목록은 배포 경로에 두지 않는다. 과학 3은 2015 개정 교과서 내용 참고로 표시한다.
-4. Vercel 미리보기 프로젝트의 환경변수에 연결 설정을 등록하고 미리보기를 배포한다. Supabase 서비스 역할 키와 OpenAI 키는 서버 환경변수로만 둔다. 생성 한도 기본값은 교사당 하루 10회이며 한국 시간 자정에 날짜가 바뀐다.
-5. 배포 URL에서 테스트 교사로 로그인해 근거 표시, 실제 수업안 생성, 수정·저장·재열기, 출처가 포함된 PDF를 검증한다. 별도 테스트 계정에서 다른 계정 수업안에 접근할 수 없는지 확인하고, 모바일 화면과 미확보 자료 상태를 점검한다.
+- [개발 계획](DEVELOPMENT_PLAN.md): 이전 Supabase/Vercel 설계 기록과 현재 Pages/Workers 전환 상태
+- [자료 현황](SOURCE_INVENTORY.md): 확보 자료, 공개 제외, 판본 및 권한 구분
+- [검증 체크리스트](CHECKLIST.md): 통과·미완료 항목 및 실제/모의 구분
+- [개발 기록](evidence/): 실행 결과와 미해결 의존 사항
 
-로컬에서 교과서 메타데이터 등록을 준비할 때는 `node scripts/prepare-textbook-seed.mjs <검증한 목록.json>`을 사용한다. 생성된 SQL은 `data-private/`에 두며, 표시·API 전송은 비활성으로 초기 등록한다. 호스팅 DB에 적용하기 전에는 클라우드 저장 허용 범위도 확인한다.
-
-`node scripts/verify-standard-seed.mjs "<교과서 PDF 폴더>"`를 실행하면 등록용 SQL과 함께 과학 1·2·3 PDF의 SHA-256을 검증 당시 기록과 대조한다.
+로컬 설정 파일 `.env.local`에는 공개 Worker URL과 Turnstile 공개 키를 설정합니다. Turnstile 비밀키와 사용량 제한용 키는 서버에서 관리합니다.

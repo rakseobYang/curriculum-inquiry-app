@@ -1,91 +1,68 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import nextEnv from '@next/env';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
-const root = new URL('../', import.meta.url);
-const live = process.argv.includes('--live');
-const settings = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'OPENAI_MODEL'];
-const privatePaths = ['sources-private/curriculum/sample.zip', 'data-private/textbook-review/sample.txt', '.env.local'];
-const git = spawnSync('git', ['check-ignore', '--stdin'], {
-  cwd: root, input: privatePaths.join('\n') + '\n', encoding: 'utf8',
-});
-const ignored = new Set(git.stdout?.trim().split(/\r?\n/) ?? []);
-const tracked = spawnSync('git', ['ls-files', 'sources-private', 'data-private', '.env', '.env.*'], {
-  cwd: root, encoding: 'utf8',
-});
-const trackedPrivate = tracked.stdout?.trim().split(/\r?\n/).filter(path => path && path !== '.env.example') ?? [];
-const unignored = spawnSync('git', ['ls-files', '--others', '--exclude-standard', '--',
-  'sources-private', 'data-private', 'video/out', 'test-results', '.env', '.env.*'], {
-  cwd: root, encoding: 'utf8',
-});
-const unignoredPrivate = unignored.stdout?.trim().split(/\r?\n/).filter(path => path && path !== '.env.example') ?? [];
-const vercelIgnore = new Set(readFileSync(new URL('.vercelignore', root), 'utf8').trim().split(/\r?\n/));
-if (tracked.status !== 0 || unignored.status !== 0 || privatePaths.some(path => !ignored.has(path)) ||
-    trackedPrivate.length || unignoredPrivate.length ||
-    ['sources-private/', 'data-private/', '.env*', 'video/', 'test-results/'].some(path => !vercelIgnore.has(path))) {
-  console.error('Private source exclusion check failed.');
+const root = process.cwd();
+const runGit = (args, input) => spawnSync('git', args, { cwd: root, input, encoding: 'utf8' });
+const privateSamples = ['sources-private/sample.pdf', 'data-private/sample.json', '.env.local',
+  'workers/.dev.vars', 'workers/.wrangler/state/sample', 'out/sample.pdf'];
+const ignoredResult = runGit(['check-ignore', '--stdin'], privateSamples.join('\n') + '\n');
+const ignored = new Set((ignoredResult.stdout ?? '').trim().split(/\r?\n/));
+const trackedResult = runGit(['ls-files', '--', 'sources-private', 'data-private', '.env', '.env.*',
+  'workers/.dev.vars', 'workers/.wrangler']);
+const trackedPrivate = (trackedResult.stdout ?? '').trim().split(/\r?\n/).filter(Boolean)
+  .filter(path => path !== '.env.example');
+const untrackedResult = runGit(['ls-files', '--others', '--exclude-standard', '--',
+  'sources-private', 'data-private', '.env', '.env.*', 'workers/.dev.vars', 'workers/.wrangler']);
+const untrackedPrivate = (untrackedResult.stdout ?? '').trim().split(/\r?\n/).filter(Boolean)
+  .filter(path => path !== '.env.example');
+const requiredIgnore = privateSamples.filter(path => !ignored.has(path));
+if (ignoredResult.status !== 0 || trackedResult.status !== 0 || untrackedResult.status !== 0 ||
+    requiredIgnore.length || trackedPrivate.length || untrackedPrivate.length) {
+  console.error('Private-data exclusion check failed.');
+  if (requiredIgnore.length) console.error('Missing ignore rules for:', requiredIgnore.join(', '));
+  if (trackedPrivate.length) console.error('Tracked private paths found:', trackedPrivate.join(', '));
+  if (untrackedPrivate.length) console.error('Unignored private paths found:', untrackedPrivate.join(', '));
   process.exit(2);
 }
-console.log('Git private paths are ignored and untracked. Vercel exclusion rules are present.');
 
-nextEnv.loadEnvConfig(fileURLToPath(root), false);
-const missing = settings.filter(name => !process.env[name]?.trim());
-const linked = existsSync(new URL('.vercel/project.json', root));
-console.log('Vercel local project link:', linked ? 'present' : 'not found');
-if (missing.length) {
-  console.error('Missing connection settings:', missing.join(', '));
-  process.exitCode = 1;
-} else {
-  const invalid = [];
-  const { SUPABASE_URL: url, SUPABASE_ANON_KEY: anon, SUPABASE_SERVICE_ROLE_KEY: service } = process.env;
-  const parsed = URL.parse(url);
-  if (!parsed || parsed.protocol !== 'https:' || parsed.username || parsed.password ||
-      parsed.pathname !== '/' || parsed.search || parsed.hash) invalid.push('SUPABASE_URL');
-  let anonRole;
-  try {
-    anonRole = JSON.parse(Buffer.from(anon.split('.')[1], 'base64url').toString()).role;
-  } catch { /* A publishable key is not a JWT. */ }
-  if (anon === service || (!anon.startsWith('sb_publishable_') && anonRole !== 'anon')) {
-    invalid.push('SUPABASE_ANON_KEY');
-  }
-  const limit = Number(process.env.LESSON_GENERATION_DAILY_LIMIT ?? 10);
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) invalid.push('LESSON_GENERATION_DAILY_LIMIT');
-  if (invalid.length) {
-    console.error('Invalid connection settings:', invalid.join(', '));
-    process.exitCode = 1;
-  } else {
-    console.log('Connection settings passed local validation.');
-    if (!live) {
-      console.log('Live connectivity has not been checked. Use --live for read-only probes.');
-    } else {
-      const probes = [
-        ['Supabase verified standards', async () => {
-          const endpoint = new URL('/rest/v1/curriculum_standards', parsed);
-          endpoint.search = new URLSearchParams({ select: 'code', curriculum: 'eq.2022', verified: 'eq.true', limit: '1' });
-          const response = await fetch(endpoint, { method: 'HEAD', redirect: 'error',
-            headers: { apikey: service, authorization: 'Bearer ' + service, prefer: 'count=exact' },
-            signal: AbortSignal.timeout(8000) });
-          if (!response.ok) return 'HTTP ' + response.status;
-          const count = response.headers.get('content-range')?.split('/').at(-1);
-          return count === '87' ? null : 'expected 87 verified rows';
-        }],
-        ['OpenAI model access', async () => {
-          const model = encodeURIComponent(process.env.OPENAI_MODEL.trim());
-          const response = await fetch('https://api.openai.com/v1/models/' + model, {
-            headers: { authorization: 'Bearer ' + process.env.OPENAI_API_KEY }, redirect: 'error',
-            signal: AbortSignal.timeout(8000) });
-          await response.body?.cancel();
-          return response.ok ? null : 'HTTP ' + response.status;
-        }],
-      ];
-      const results = await Promise.all(probes.map(async ([label, probe]) => {
-        const error = await probe().catch(() => 'request failed');
-        console.log(label + ': ' + (error ?? 'pass'));
-        return error;
-      }));
-      if (results.some(Boolean)) process.exitCode = 1;
-      console.log('Read-only probes do not verify teacher authentication, generation, or deployment.');
+const staticConfig = readFileSync(join(root, 'next.config.mjs'), 'utf8');
+const workflow = readFileSync(join(root, '.github/workflows/pages.yml'), 'utf8');
+const workerConfig = readFileSync(join(root, 'workers/wrangler.jsonc'), 'utf8');
+if (!staticConfig.includes("output: 'export'") || !staticConfig.includes("basePath: '/curriculum-inquiry-app'") ||
+    !workflow.includes('actions/deploy-pages') || !workerConfig.includes('GENERATION_LIMITER')) {
+  console.error('GitHub Pages or Worker configuration is incomplete.');
+  process.exit(2);
+}
+
+if (!existsSync(join(root, 'out/index.html'))) {
+  console.error('Static artifact missing. Run npm run build first.');
+  process.exit(2);
+}
+const privateName = /(?:textbook-review|teacher[-_]textbook|verified-standard-seed\.sql|\.dev\.vars|service[_-]?role)/iu;
+const secretValue = /(?:sk-(?:proj-)?[A-Za-z0-9_-]{20,}|OPENAI_API_KEY\s*[:=]\s*[^\s"']{12,}|TURNSTILE_SECRET_KEY\s*[:=]\s*[^\s"']{12,})/u;
+const files = [];
+const walk = directory => {
+  for (const name of readdirSync(directory)) {
+    const path = join(directory, name);
+    const rel = relative(join(root, 'out'), path).replaceAll('\\', '/');
+    if (privateName.test(rel)) throw new Error(`Private artifact path found: ${rel}`);
+    if (statSync(path).isDirectory()) walk(path);
+    else {
+      files.push(rel);
+      const body = readFileSync(path);
+      if (body.length < 5_000_000 && secretValue.test(body.toString('utf8'))) {
+        throw new Error(`Possible server secret in public artifact: ${rel}`);
+      }
     }
   }
+};
+try {
+  walk(join(root, 'out'));
+  const artifactCheck = runGit(['status', '--short', '--', 'out']);
+  console.log(`Release source check passed. Public artifact contains ${files.length} files; no private catalog or server secret detected.`);
+  console.log('Actual Cloudflare/OpenAI connectivity and Pages deployment are not checked by this local command.');
+} catch (error) {
+  console.error(error.message);
+  process.exit(2);
 }

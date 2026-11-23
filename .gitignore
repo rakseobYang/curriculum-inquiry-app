@@ -1,11 +1,15 @@
 ﻿node_modules/
 .next/
 .vercel/
+out/
+.wrangler/
 .env
 .env.*
 !.env.example
 sources-private/
 data-private/
+workers/.dev.vars
+workers/.wrangler/
 video/node_modules/
 video/out/
 playwright-report/

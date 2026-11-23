@@ -1,0 +1,19 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "curriculum-inquiry-generation",
+  "main": "./src/index.ts",
+  "compatibility_date": "2026-11-22",
+  "workers_dev": true,
+  "ai": { "binding": "AI" },
+  "vars": {
+    "ALLOWED_ORIGIN": "https://rakseobyang.github.io"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "GENERATION_LIMITER", "class_name": "GenerationLimiter" }
+    ]
+  },
+  "exports": {
+    "GenerationLimiter": { "type": "durable-object", "storage": "sqlite" }
+  }
+}

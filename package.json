@@ -5,9 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "standards:refresh": "node scripts/build-public-standards.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:mobile": "node scripts/test-mobile.mjs"
+    "test:mobile": "node scripts/test-mobile.mjs",
+    "worker:dev": "wrangler dev --config workers/wrangler.jsonc",
+    "worker:deploy": "wrangler deploy --config workers/wrangler.jsonc",
+    "check:pages": "node scripts/check-pages-artifact.mjs"
   },
   "dependencies": {
     "next": "^16.0.0",
@@ -20,6 +23,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "playwright-core": "^1.65.1",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "wrangler": "^4.166.0"
   }
 }

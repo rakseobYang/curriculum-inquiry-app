@@ -1,5 +1,27 @@
 # 기말과제 앱 개발 계획 및 완료 현황
 
+## 2026-11-23 무료 운영 구성
+
+아래 OpenAI 연결 계획을 Workers AI 바인딩으로 대체했다. 수업안은 IndexedDB에 저장하고, 생성 한도만 SQLite Durable Object에 기록한다. Workers Free의 일일 무료 AI 할당량 소진 시 오류를 안내한다. 실제 배포와 모델 생성은 계정 인증과 Turnstile 설정 후 확인한다.
+
+## 최신 진행 상태: 정적 Pages + Workers 전환 (2026-11-22)
+
+아래의 기존 Supabase/Vercel 계획은 이전 운영안 기록이며 현재 결정된 운영 구조가 아닙니다. 코드는 기존 Git 저장소를 유지하고, 화면은 Next.js 정적 내보내기 + GitHub Pages (`/curriculum-inquiry-app/`), 브라우저 로그인 없음, 수업안 저장은 IndexedDB, 실시간 생성은 Cloudflare Workers + 서버 측 OpenAI로 전환합니다. Supabase와 Vercel은 운영 경로에서 제외했습니다.
+
+이번 구현에는 성취기준 정적 검색, 교과서 연계 불가 안내, 교사 편집·검토·시간 배분·기록표·인쇄, 브라우저 저장 CRUD 및 백업/복원, Worker의 Turnstile 서버 검증과 입력·출력·시간·지속 사용량 제한, Pages 산출물 민감자료 점검이 포함됩니다. 실제 AI/Cloudflare/GitHub 계정 연결과 배포는 아직 수행하지 않았습니다. 브라우저 자동 검증의 Worker 응답은 모의 응답이며 실제 서비스 증거로 기록하지 않습니다.
+
+### 남은 실제 서비스 단계
+
+1. 사용자가 Cloudflare 계정에서 Worker 및 Turnstile 구성을 준비하고 Secret을 Worker에 직접 입력합니다.
+2. 사용자가 OpenAI API 프로젝트·키·모델과 사용량 예산을 준비합니다. 실제 호출은 사용자 설정 후에만 검증합니다.
+3. Worker 허용 Origin, 실제 Pages 주소, 공개 Turnstile 키와 API URL을 연결합니다.
+4. GitHub Pages Actions를 활성화한 뒤 배포하고 실제 URL 하위 경로, 모바일, 오류/빈 화면을 점검합니다.
+5. 실제 AI 생성·저장·재열기·수정·삭제·백업/복원·인쇄를 분리 기록합니다. 수업안의 과학적 내용은 교사가 검토합니다.
+
+DB 또는 API 관련 과제 가산점은 확정된 것으로 표현하지 않습니다. 자료 표시·클라우드 저장·API 전송 허가도 각각 확인되기 전까지 비활성입니다.
+
+**기록 보존 안내:** 이 절 아래의 기존 설계·단계표·비용표는 Supabase/Vercel 결정 당시의 과거 계획 스냅샷입니다. 최신 실행 지침이나 현재 구현 상태로 사용하지 않습니다. 이력 보존을 위해 지우지 않았으며 실제 현재 상태는 위 요약과 [CHECKLIST.md](CHECKLIST.md), [README.md](README.md)를 따릅니다.
+
 기준일: 2026-11-22
 
 ## 목표와 자료 원칙
