@@ -46,3 +46,24 @@
 - Worker Secret 이름은 `TURNSTILE_SECRET_KEY`, `RATE_LIMIT_HMAC_KEY`입니다. 비밀값 자체는 채팅·Git·브라우저에 입력하지 않습니다.
 - 교과서 자료 표시, 클라우드 저장, 외부 API 전송 권한은 각각 확인되지 않았고 비활성으로 유지합니다. 현 구조는 교과서 자료를 서버에 저장/전송하지 않습니다.
 - DB 및 API 가산점은 확정된 것으로 간주하지 않습니다.
+
+## 날짜별 개발 이력
+
+2026-11-23에 소급 정리했다. 모든 날짜와 시각은 Asia/Seoul 기준이다. 작업일은 당시 기록과 대화로 확인하고, Git 기록은 커밋이 만들어진 시점의 근거로 사용했다. 문서의 계획 작성과 요구에 따른 구현 흐름은 확인했으나, 별도의 Plan 또는 Goal 기능 사용 여부는 확인할 수 없다. 확인 범위는 저장소, Actions, 이 대화에 남아 있는 메시지와 실행 결과다.
+
+| 작업일 | 주요 변경 | 검증 결과 | 근거 | 상세 기록 |
+|---|---|---|---|---|
+| 2026-11-21 | 저장소 준비, README에 프로젝트 계획과 Git 제외 규칙 추가 | 커밋 2건과 파일 변경 확인. 당시 앱 실행은 미확인 | [d10ef9d](https://github.com/rakseobYang/curriculum-inquiry-app/commit/d10ef9d), [8d4f8de](https://github.com/rakseobYang/curriculum-inquiry-app/commit/8d4f8de) | [11월 21일](evidence/2026-11-21.md#소급-정리) |
+| 2026-11-22 | 과제 계획·검증 기준 정리, 기존 수업안 흐름 구현, 정적 Pages 구조로 전환 착수 | 로컬 빌드·모바일·모의 응답 기록 있음. 당시 Vercel 배포 실패, 실제 AI·운영 DB 미검증 | [f330518](https://github.com/rakseobYang/curriculum-inquiry-app/commit/f330518), [fa07c76](https://github.com/rakseobYang/curriculum-inquiry-app/commit/fa07c76) | [11월 22일](evidence/2026-11-22.md) |
+| 2026-11-23 | 무료 AI 구성, GitHub 업로드·Pages 배포, README와 About에 앱 링크 추가, 사용자 피드백에 따른 기본 양식 로컬 구현 | 공개 HTTP 200·별도 Edge 검색과 로컬 기본 초안 저장 확인. 사용자 환경의 접속 실패 원인 및 실시간 AI 미확인 | [502e8c9](https://github.com/rakseobYang/curriculum-inquiry-app/commit/502e8c9), [73fb3ad](https://github.com/rakseobYang/curriculum-inquiry-app/commit/73fb3ad), [Pages 배포](https://github.com/rakseobYang/curriculum-inquiry-app/actions/runs/45110909512/attempts/2) | [11월 23일](evidence/2026-11-23.md#소급-정리) |
+
+### 이전 상태 기록 정정
+
+- 위쪽의 Pages 배포 미완료 표시와 HTTP 404는 Pages 설정 전 상태다. 11월 23일 Actions에서 실제 게시를 확인했다. 별도 Edge에서 공개 화면과 검색을 확인했지만 사용자가 겪은 접속 문제는 원인 미확인 상태다.
+- 이전 기록의 “커밋 날짜 2일”은 11월 22일 시점의 집계였다. 이후 11월 23일에 2건이 추가됐다. AI·서버 DB 연결은 공개 화면 배포와 별개며, 기본 양식 초안은 로컬에서만 확인했다.
+
+### 과제 인정 기간 내 커밋 날짜
+
+- 소급 정리의 기준 커밋 `73fb3ad`까지 커미터 시각을 Asia/Seoul로 집계하면 총 **8건, 서로 다른 3일**이다. 11월 21일 2건, 22일 4건, 23일 2건이다. 같은 8건의 작성자 날짜도 일치한다.
+- 확인한 과제 안내의 기준은 12주차 수업일부터 서로 다른 5일 이상이다. 기간 시작일을 확인하지 못했다. 시작일이 11월 21일 이전 또는 당일이고 세 날짜가 모두 제출 인정 기간에 속하면 **3일**, 22일이면 최대 **2일**, 23일이면 최대 **1일**, 24일 이후라면 현재 **0일**이다. 5일 요건은 현재 이력으로 충족되지 않는다.
+- 오늘 추가한 소급 문서는 기록 작성일의 산출물이다. 과거 날짜의 작업이나 커밋을 새로 충족하지 않으며, 이번 문서 작성은 커밋 일수에 추가하지 않았다. 12주차 실제 수업일, 13주차 강의 내용, 날짜가 확인되지 않는 과거 화면이나 프롬프트는 추정하지 않았다.
