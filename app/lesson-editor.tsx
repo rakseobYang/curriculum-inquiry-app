@@ -9,7 +9,7 @@ import { createBackup, listPlans, parseBackup, removePlan, savePlan, savePlans,
 type Standard = OfficialStandard;
 type Generated = {
   status: 'generated';
-  generationMode: 'official-curriculum-only';
+  generationMode: 'official-curriculum-only' | 'local-template';
   alignmentStatus: 'teacher-review';
   officialStandard: { code: string; official_text: string; official_source: string };
   designedLesson: { lesson: number; total: number };
@@ -39,6 +39,8 @@ declare global {
 }
 
 const standards = standardsData as Standard[];
+const exampleCode = standards[0]?.code ?? '';
+const exampleKeyword = ['세포', '탐구'].find(word => standards.some(row => row.official_text.includes(word))) ?? '';
 const generationUrl = process.env.NEXT_PUBLIC_GENERATION_API_URL?.trim() ?? '';
 const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? '';
 const alignmentChecks: Record<AlignmentCheck, string> = {
@@ -78,7 +80,8 @@ function isEditorState(value: unknown): value is EditorState {
   const standard = state.standard;
   const result = state.result;
   return Boolean(standard?.verified === true && standard.curriculum === '2022' && result?.status === 'generated' &&
-    result.generationMode === 'official-curriculum-only' && result.alignmentStatus === 'teacher-review' &&
+    (result.generationMode === 'official-curriculum-only' || result.generationMode === 'local-template') &&
+    result.alignmentStatus === 'teacher-review' &&
     result.references.length === 0 && Number.isSafeInteger(result.plannedMinutes) &&
     typeof state.title === 'string');
 }
@@ -93,6 +96,8 @@ export default function LessonEditor() {
   const [editorId, setEditorId] = useState('');
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [busy, setBusy] = useState(false);
+  const generationInFlight = useRef(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
@@ -227,6 +232,7 @@ export default function LessonEditor() {
     setSelected(state.standard.code);
     setFeedback('브라우저에 저장된 수업안을 열었습니다.');
     setError('');
+    requestAnimationFrame(() => document.getElementById('lesson-review')?.scrollIntoView());
   }
 
   async function deletePlan(plan: SavedPlan) {
@@ -288,20 +294,62 @@ export default function LessonEditor() {
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!standard || !generationUrl || !turnstileSiteKey || !turnstileToken || databaseStatus === 'error') return;
+    const useAi = Boolean(generationUrl && turnstileSiteKey && !generationUnavailable);
+    if (!standard || busy || generationInFlight.current || (useAi && !turnstileToken)) return;
     const fields = new FormData(event.currentTarget);
     const lesson = Number(fields.get('lesson'));
     const totalLessons = Number(fields.get('totalLessons'));
     const minutes = Number(fields.get('minutes'));
-    if (!Number.isSafeInteger(lesson) || !Number.isSafeInteger(totalLessons) || lesson > totalLessons ||
+    if (!Number.isSafeInteger(lesson) || !Number.isSafeInteger(totalLessons) || lesson < 1 || lesson > totalLessons || totalLessons > 50 ||
         !Number.isSafeInteger(minutes) || minutes < 1 || minutes > 300) {
       setError('차시와 수업 시간을 확인해 주세요. 전체 1–50차시, 수업 시간 1–300분을 입력합니다.');
       return;
     }
     if (!confirmDiscard()) return;
-    setBusy(true);
     setError('');
     setFeedback('');
+    const equipment = String(fields.get('equipment') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const studentConditions = String(fields.get('studentConditions') ?? '').trim();
+    if (!useAi) {
+      const phases = [
+        { activity: '성취기준을 읽고 관찰하거나 비교할 질문 정하기', weight: 2 },
+        { activity: '안전을 확인하고 모둠별로 관찰 자료 기록하기', weight: 5 },
+        { activity: '자료를 근거로 설명하고 새로운 상황에 적용하기', weight: 3 },
+      ].slice(0, Math.min(minutes, 3));
+      const weight = phases.reduce((sum, phase) => sum + phase.weight, 0);
+      let remaining = minutes;
+      const draft: LessonDraft = {
+        objective: `${standard.code}의 수행을 목표로 탐구 자료를 모으고 근거로 설명한다. 구체적인 수행 목표는 교사가 공식 원문과 대조해 정한다.`,
+        concepts: '공식 원문에서 핵심 개념을 골라 관찰하기 전에 학생의 생각을 확인한다.',
+        investigationQuestion: '무엇을 비교하거나 관찰하면 성취기준의 질문에 답할 수 있을까? 실제 관찰 대상은 교사가 정한다.',
+        investigation: `모둠별로 관찰 대상과 조건을 정하고 같은 기준으로 자료를 수집한다.${studentConditions ? ` 학급 조건: ${studentConditions}. 조건에 맞게 역할과 설명 방법을 조정한다.` : ''}`,
+        record: '조건, 관찰 또는 측정 결과, 단위를 기록한다. 측정값이 없으면 관찰한 사실로 작성한다.',
+        explanation: '주장을 한 문장으로 쓰고 기록표의 근거와 관련 과학 개념을 연결한다.',
+        application: '교사가 선정한 새로운 생활 사례에 같은 설명을 적용하고 적용의 한계를 말한다.',
+        assessment: '질문과 관찰 방법의 연결, 기록의 명확성, 근거를 사용한 설명을 확인한다.',
+        materialsAndSafety: `가용 장비: ${equipment.join(', ') || '입력 없음'}. 활동 전 교사가 도구 사용과 안전 조건을 확인한다.`,
+        alignment: '교사가 공식 성취기준과 활동을 대조한다. 이 기본 양식에는 교과서 근거를 사용하지 않았다.',
+        phases: phases.map((phase, index) => {
+          const duration = index === phases.length - 1 ? remaining : 1 + Math.floor((minutes - phases.length) * phase.weight / weight);
+          remaining -= duration;
+          return { activity: phase.activity, minutes: duration };
+        }),
+        recordingTable: { columns: ['관찰 조건', '관찰·측정 결과', '단위 또는 메모'], rowCount: 3 },
+      };
+      setEditor({ standard, title: `${standard.code} 기본 수업안`, result: {
+        status: 'generated', generationMode: 'local-template', alignmentStatus: 'teacher-review',
+        officialStandard: { code: standard.code, official_text: standard.official_text, official_source: standard.official_source },
+        designedLesson: { lesson, total: totalLessons }, plannedMinutes: minutes, plannedEquipment: equipment,
+        plannedClassConditions: studentConditions, draft, references: [],
+      } });
+      setEditorId('');
+      setSavedSnapshot('');
+      setFeedback('기본 양식으로 초안을 만들었습니다. 수업에 맞게 활동과 평가를 편집하세요.');
+      return;
+    }
+    generationInFlight.current = true;
+    setGenerating(true);
+    setBusy(true);
     try {
       const response = await fetch(generationUrl, {
         method: 'POST',
@@ -312,8 +360,8 @@ export default function LessonEditor() {
           lesson,
           totalLessons,
           minutes,
-          equipment: String(fields.get('equipment') ?? '').split(',').map(value => value.trim()).filter(Boolean),
-          studentConditions: String(fields.get('studentConditions') ?? '').trim(),
+          equipment,
+          studentConditions,
           turnstileToken,
         }),
       });
@@ -334,6 +382,8 @@ export default function LessonEditor() {
         : 'Workers 연결에 실패했습니다. 설정을 확인해 주세요.');
     } finally {
       setBusy(false);
+      generationInFlight.current = false;
+      setGenerating(false);
       setTurnstileToken('');
       if (turnstileWidget.current && window.turnstile) window.turnstile.reset(turnstileWidget.current);
     }
@@ -348,34 +398,21 @@ export default function LessonEditor() {
     {feedback && <p role="status">{feedback}</p>}
     {databaseStatus === 'loading' && <p role="status">이 브라우저의 저장 공간을 확인하고 있습니다.</p>}
     {databaseStatus === 'error' && <p role="alert">IndexedDB를 사용할 수 없습니다. 브라우저의 사이트 저장 권한과 여유 공간을 확인해 주세요.</p>}
-    <section className="controls saved-plans" aria-labelledby="saved-plans-title">
-      <h2 id="saved-plans-title">내 수업안 · 이 브라우저</h2>
-      <div className="grid">
-        <label>저장한 수업안 검색<input type="search" value={savedQuery}
-          onChange={event => setSavedQuery(event.target.value)} placeholder="제목 검색"/></label>
-        <button type="button" disabled={databaseStatus !== 'ready' || busy} onClick={downloadBackup}>백업 다운로드</button>
-        <label className="file-label">백업 복원<input ref={backupInput} type="file" accept="application/json,.json"
-          disabled={databaseStatus !== 'ready' || busy} onChange={event => void restoreBackup(event.target.files?.[0])}/></label>
-        <button type="button" disabled={busy} onClick={startNewPlan}>새 수업안</button>
-      </div>
-      {databaseStatus === 'ready' && saved.length === 0 && <p role="status">아직 이 브라우저에 저장된 수업안이 없습니다.</p>}
-      {saved.length > 0 && matchingSaved.length === 0 && <p role="status">검색 결과가 없습니다.</p>}
-      {matchingSaved.length > 0 && <ul className="saved-list">{matchingSaved.map(plan => <li key={plan.id}>
-        <span>{plan.title}<small>수정 {new Date(plan.updatedAt).toLocaleString('ko-KR')}</small></span>
-        <button type="button" disabled={busy} onClick={() => openPlan(plan)}>열기</button>
-        <button type="button" className="secondary" disabled={busy} onClick={() => void deletePlan(plan)}>삭제</button>
-      </li>)}</ul>}
-    </section>
-
-    <form className="controls" onSubmit={event => void generate(event)}>
+    <form id="lesson-form" className="controls" aria-busy={generating} onSubmit={event => void generate(event)}>
       <h2>수업안 입력</h2>
-      <p><strong>공식 교육과정 기반 생성</strong> · 선택한 2022 개정 성취기준을 기준으로 AI 초안을 작성합니다.</p>
-      <label>성취기준 검색<input value={query} onChange={event => setQuery(event.target.value)} placeholder="코드 또는 공식 원문 키워드"/></label>
+      <h3>성취기준 선택</h3>
+      <div className="search-row">
+        <label>성취기준 검색<input value={query} onChange={event => setQuery(event.target.value)}
+          aria-describedby="standard-search-help" placeholder={`예: ${exampleCode} 또는 ${exampleKeyword}`}/></label>
+        <button type="button" className="secondary" disabled={!query} onClick={() => setQuery('')}>검색어 지우기</button>
+      </div>
+      <small id="standard-search-help">코드나 원문의 단어를 검색한 뒤 아래 목록에서 성취기준을 선택하세요.</small>
+      <p className="search-count" role="status">성취기준 {matchingStandards.length}개</p>
       <label>2022 개정 중학교 과학 성취기준<select value={selected} required onChange={event => setSelected(event.target.value)}>
         <option value="">성취기준 선택</option>
         {matchingStandards.map(row => <option key={row.code} value={row.code}>{row.code} {row.official_text}</option>)}
       </select></label>
-      {matchingStandards.length === 0 && <p role="status">검색 결과가 없습니다.</p>}
+      {matchingStandards.length === 0 && <p role="status">검색 결과가 없습니다. 원문에 있는 짧은 단어 하나로 검색하거나, 검색어를 지우고 전체 목록에서 선택하세요.</p>}
       {standard && <section className="standard-card" aria-label="공식 성취기준 근거">
         <p><strong>교육과정 공식 원문 · 2022 개정</strong><br/>{standard.official_text}</p>
         <p>출처: {standard.official_source} · 데이터 기준 커밋 {standard.dataset_commit}</p>
@@ -383,6 +420,7 @@ export default function LessonEditor() {
         <p className="evidence-status"><strong>교과서 연계 생성 불가</strong><br/>
           공개 배포본에는 표시와 외부 전송이 승인된 교과서 근거가 없습니다. 교과서 쪽수·차시를 추정하지 않습니다. 과학 3 자료는 2015 개정 참고 자료이며 2022 개정 교과서로 표시하지 않습니다.</p>
       </section>}
+      <h3>수업 조건 입력</h3>
       <div className="grid">
         <label>설계할 차시<input name="lesson" type="number" min="1" max="50" required defaultValue="1"/></label>
         <label>전체 차시<input name="totalLessons" type="number" min="1" max="50" required defaultValue="1"/></label>
@@ -390,18 +428,21 @@ export default function LessonEditor() {
       </div>
       <label>사용 가능한 장비<input name="equipment" maxLength={1200} placeholder="쉼표로 구분"/></label>
       <label>학급 조건<input name="studentConditions" maxLength={400} placeholder="예: 4명씩 모둠, 측정 도구 사용 경험 없음"/></label>
-      <small>학생 이름 등 개인정보나 건강·가정 정보를 입력하지 마세요. 입력 내용과 공식 성취기준은 Workers를 거쳐 OpenAI로 전송됩니다.</small>
+      <small>학생 이름 등 개인정보나 건강·가정 정보를 입력하지 마세요.</small>
       {!generationUrl || !turnstileSiteKey || generationUnavailable
-        ? <p role="status">실시간 AI 생성 설정이 아직 없습니다. Workers API 주소와 Turnstile 공개 사이트 키가 설정되기 전까지 생성하지 않습니다.</p>
-        : <div className="turnstile-wrap"><p>자동 요청 방지 확인을 완료해야 실제 AI를 호출할 수 있습니다.</p><div ref={turnstileContainer} />
+        ? <p role="status">공식 성취기준과 수업 조건을 브라우저의 기본 양식에 채워 초안을 만듭니다.</p>
+        : <div className="turnstile-wrap"><p>자동 요청 방지 확인 후 AI 초안을 요청합니다.</p><div ref={turnstileContainer} />
           {!turnstileReady && <small>Turnstile을 불러오는 중입니다.</small>}</div>}
-      <button disabled={busy || databaseStatus !== 'ready' || !standard || !generationUrl || !turnstileSiteKey || !turnstileToken}>
-        {busy ? '실제 AI 생성 중…' : '교육과정 기반 AI 초안 생성'}
+      <button disabled={busy || !standard || Boolean(generationUrl && turnstileSiteKey && !generationUnavailable && !turnstileToken)}>
+        {!generationUrl || !turnstileSiteKey || generationUnavailable ? '기본 수업안 만들기' :
+          generating ? '실제 AI 생성 중…' : '교육과정 기반 AI 초안 생성'}
       </button>
     </form>
 
-    {editor && result && <article>
-      <p role="status"><strong>공식 교육과정 기반 AI 초안 · 교과서 연계 아님</strong></p>
+    {generating && <p className="controls" role="status">AI가 초안을 만드는 중입니다. 완료되면 검토할 수 있습니다.</p>}
+    {editor && result && <article id="lesson-review">
+      <h2>수업안 검토</h2>
+      <p role="status"><strong>{result.generationMode === 'local-template' ? '공식 교육과정 기반 기본 양식 초안 · AI 미사용' : '공식 교육과정 기반 AI 초안'} · 교과서 연계 아님</strong></p>
       <p className="review-warning">교사 내용 검토 필요 · 성취기준 적용, 과학적 정확성, 탐구 실행 가능성, 안전, 평가를 확인하세요. AI 초안은 교육과정 일치를 확정하지 않습니다.</p>
       {hasUnsavedPlan && <p role="status">저장하지 않은 변경 사항이 있습니다.</p>}
       {!hasUnsavedPlan && editorId && <p role="status">현재 수업안은 이 브라우저에 저장되어 있습니다.</p>}
@@ -426,7 +467,7 @@ export default function LessonEditor() {
           onChange={event => setEditor({ ...editor, alignmentNotes: event.target.value })}/></label>
         {editor.alignmentNotes?.trim() && <p className="print-content">교사 점검 메모 · {editor.alignmentNotes}</p>}
       </section>
-      <p><strong>수업 설계</strong> · AI 작성 초안과 교사 편집 내용</p>
+      <p><strong>수업 설계</strong> · 초안과 교사 편집 내용</p>
       {sections.map(key => <section key={key}>
         <h3>{lessonSections[key]}</h3>
         <textarea className="controls" aria-label={lessonSections[key]} value={result.draft[key]}
@@ -480,5 +521,24 @@ export default function LessonEditor() {
         onClick={() => void saveCurrentPlan()}>{busy ? '저장 중…' : editorId ? '수업안 수정 저장' : '수업안 저장'}</button>
       <button className="controls" disabled={!validTiming || !validColumns} onClick={() => window.print()}>인쇄 / PDF 저장</button>
     </article>}
+
+    <section id="saved-plans" className="controls saved-plans" aria-labelledby="saved-plans-title">
+      <h2 id="saved-plans-title">내 수업안 · 이 브라우저</h2>
+      <div className="grid">
+        <label>저장한 수업안 검색<input type="search" value={savedQuery}
+          onChange={event => setSavedQuery(event.target.value)} placeholder="제목 검색"/></label>
+        <button type="button" disabled={databaseStatus !== 'ready' || busy} onClick={downloadBackup}>백업 다운로드</button>
+        <label className="file-label">백업 복원<input ref={backupInput} type="file" accept="application/json,.json"
+          disabled={databaseStatus !== 'ready' || busy} onChange={event => void restoreBackup(event.target.files?.[0])}/></label>
+        <button type="button" disabled={busy} onClick={startNewPlan}>새 수업안</button>
+      </div>
+      {databaseStatus === 'ready' && saved.length === 0 && <div className="empty-state"><p role="status">아직 이 브라우저에 저장된 수업안이 없습니다.</p><a href="#lesson-form">수업안 작성으로 이동</a></div>}
+      {saved.length > 0 && matchingSaved.length === 0 && <p role="status">검색 결과가 없습니다. 제목 검색어를 지우거나 다른 단어를 입력하세요.</p>}
+      {matchingSaved.length > 0 && <ul className="saved-list">{matchingSaved.map(plan => <li key={plan.id}>
+        <span>{plan.title}<small>수정 {new Date(plan.updatedAt).toLocaleString('ko-KR')}</small></span>
+        <button type="button" disabled={busy} onClick={() => openPlan(plan)}>열기</button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => void deletePlan(plan)}>삭제</button>
+      </li>)}</ul>}
+    </section>
   </>;
 }

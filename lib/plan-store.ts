@@ -108,7 +108,8 @@ function isPlan(value: unknown): value is StoredPlan {
   return Boolean(standard && typeof standard.code === 'string' && standard.code.length <= 30 &&
     typeof standard.official_text === 'string' && standard.official_text.length <= 500 &&
     typeof standard.official_source === 'string' && standard.official_source.length <= 500 &&
-    result?.status === 'generated' && result.generationMode === 'official-curriculum-only' &&
+    result?.status === 'generated' &&
+    (result.generationMode === 'official-curriculum-only' || result.generationMode === 'local-template') &&
     result.alignmentStatus === 'teacher-review' && Array.isArray(result.references) && result.references.length === 0 &&
     Number.isSafeInteger(plannedMinutes) && (plannedMinutes as number) > 0 &&
     officialStandard?.code === standard.code &&
