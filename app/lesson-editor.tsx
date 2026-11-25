@@ -441,7 +441,7 @@ export default function LessonEditor() {
 
     {generating && <p className="controls" role="status">AI가 초안을 만드는 중입니다. 완료되면 검토할 수 있습니다.</p>}
     {editor && result && <article id="lesson-review">
-      <h2>수업안 검토</h2>
+      <h2>탐구 기록 · 수업안 검토</h2>
       <p role="status"><strong>{result.generationMode === 'local-template' ? '공식 교육과정 기반 기본 양식 초안 · AI 미사용' : '공식 교육과정 기반 AI 초안'} · 교과서 연계 아님</strong></p>
       <p className="review-warning">교사 내용 검토 필요 · 성취기준 적용, 과학적 정확성, 탐구 실행 가능성, 안전, 평가를 확인하세요. AI 초안은 교육과정 일치를 확정하지 않습니다.</p>
       {hasUnsavedPlan && <p role="status">저장하지 않은 변경 사항이 있습니다.</p>}
